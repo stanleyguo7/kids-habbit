@@ -1,34 +1,29 @@
 # kids-habbit
 
-给孩子用的 WebApp 集合（PWA 形态，尽量接近原生体验）。
+给孩子用的 WebApp 集合（当前包含：玩具记账）。
 
-## 当前版本（v1）
-- 默认内置两个账号：**小元**、**小满**
-- 支持在页面内切换账号
-- 每个账号数据隔离（浏览器本地存储）
-- 第一款小程序：**玩具记账**
-  - 按月（YYYY-MM）查看
-  - 可新增玩具购买记录（名称、金额、日期、备注）
-  - 可上传照片，并在历史中以缩略图展示
+## 当前版本（SQLite 存储）
+- 默认账号：**小元**、**小满**
+- 支持账号切换，数据按账号隔离
+- 每月可上传多张玩具照片
+- 记录不再存 localStorage，而是：
+  - 图片文件：`uploads/`
+  - 数据库：`data/kids-habbit.db` (SQLite)
 
-## 技术栈
-- React + TypeScript + Vite
-- 本地存储（localStorage）
-- PWA 基础配置（manifest + service worker）
-
-## 本地运行
+## 启动方式（本地）
 ```bash
 npm install
-npm run dev
+npm run dev:full
 ```
 
-## 构建
+- 前端：`http://localhost:5173`
+- 后端 API：`http://localhost:8787`
+
+## 仅前端构建
 ```bash
 npm run build
 ```
 
-## 后续可扩展小程序建议
-- 每日阅读打卡
-- 家务积分
-- 运动习惯计时
-- 零花钱预算目标
+## 说明
+SQLite + 本地文件存储适合本机/私有服务器部署。
+如果部署到 Vercel（无状态函数环境），本地文件和 SQLite 持久化不稳定，建议后续改成对象存储 + 托管数据库。
