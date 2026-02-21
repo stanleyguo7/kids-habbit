@@ -31,6 +31,7 @@ function App() {
   const [activeUserId, setActiveUserId] = useState<string>(USERS[0].id)
   const [store, setStore] = useState<Store>({})
   const [uploading, setUploading] = useState(false)
+  const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7))
 
   useEffect(() => {
     const raw = localStorage.getItem(APP_KEY)
@@ -72,7 +73,7 @@ function App() {
             reader.onload = () => {
               resolve({
                 id: crypto.randomUUID(),
-                date: new Date().toISOString().slice(0, 10),
+                date: `${selectedMonth}-01`,
                 photoDataUrl: reader.result as string,
               })
             }
@@ -111,7 +112,11 @@ function App() {
 
       <section className="card">
         <h2>玩具记账（极速版）</h2>
-        <p className="sub">{activeUser.name}：不需要输入文字，直接上传照片就会记录到今天</p>
+        <p className="sub">{activeUser.name}：不需要输入文字，先选月份，再上传照片（可多张）</p>
+        <label>
+          记录月份
+          <input type="month" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} />
+        </label>
         <label>
           上传玩具照片（可多选）
           <input type="file" accept="image/*" multiple onChange={(e) => onPhotosChange(e.target.files)} />
