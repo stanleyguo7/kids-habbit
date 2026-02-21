@@ -8,11 +8,8 @@ type User = {
 
 type ToyRecord = {
   id: string
-  toyName: string
-  amount: number
   date: string
-  note?: string
-  photoDataUrl?: string
+  photoDataUrl: string
 }
 
 const USERS: User[] = [
@@ -21,7 +18,6 @@ const USERS: User[] = [
 ]
 
 const APP_KEY = 'kids-habbit:v1'
-
 type Store = Record<string, ToyRecord[]>
 
 const monthKey = (date: string) => date.slice(0, 7)
@@ -34,11 +30,7 @@ function formatMonth(ym: string) {
 function App() {
   const [activeUserId, setActiveUserId] = useState<string>(USERS[0].id)
   const [store, setStore] = useState<Store>({})
-  const [toyName, setToyName] = useState('')
-  const [amount, setAmount] = useState<number | ''>('')
-  const [date, setDate] = useState<string>(new Date().toISOString().slice(0, 10))
-  const [note, setNote] = useState('')
-  const [photoDataUrl, setPhotoDataUrl] = useState<string | undefined>(undefined)
+  const [uploading, setUploading] = useState(false)
 
   useEffect(() => {
     const raw = localStorage.getItem(APP_KEY)
@@ -68,32 +60,33 @@ function App() {
       .map(([month, list]) => ({ month, list: list.sort((a, b) => b.date.localeCompare(a.date)) }))
   }, [records])
 
-  const onPhotoChange = (file?: File) => {
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = () => setPhotoDataUrl(reader.result as string)
-    reader.readAsDataURL(file)
-  }
+  const onPhotosChange = async (files: FileList | null) => {
+    if (!files || files.length === 0) return
+    setUploading(true)
 
-  const addRecord = () => {
-    if (!toyName.trim() || !date || amount === '' || Number(amount) <= 0) return
-    const newRecord: ToyRecord = {
-      id: crypto.randomUUID(),
-      toyName: toyName.trim(),
-      amount: Number(amount),
-      date,
-      note: note.trim() || undefined,
-      photoDataUrl,
-    }
+    const results = await Promise.all(
+      Array.from(files).map(
+        (file) =>
+          new Promise<ToyRecord>((resolve) => {
+            const reader = new FileReader()
+            reader.onload = () => {
+              resolve({
+                id: crypto.randomUUID(),
+                date: new Date().toISOString().slice(0, 10),
+                photoDataUrl: reader.result as string,
+              })
+            }
+            reader.readAsDataURL(file)
+          }),
+      ),
+    )
+
     setStore((prev) => ({
       ...prev,
-      [activeUserId]: [newRecord, ...(prev[activeUserId] ?? [])],
+      [activeUserId]: [...results, ...(prev[activeUserId] ?? [])],
     }))
-    setToyName('')
-    setAmount('')
-    setNote('')
-    setPhotoDataUrl(undefined)
-    setDate(new Date().toISOString().slice(0, 10))
+
+    setUploading(false)
   }
 
   return (
@@ -117,38 +110,19 @@ function App() {
       </section>
 
       <section className="card">
-        <h2>玩具记账</h2>
-        <p className="sub">{activeUser.name} 的本月购买记录</p>
-        <div className="form-grid">
-          <label>
-            玩具名称
-            <input value={toyName} onChange={(e) => setToyName(e.target.value)} placeholder="例如：积木车" />
-          </label>
-          <label>
-            金额（元）
-            <input type="number" value={amount} onChange={(e) => setAmount(e.target.value ? Number(e.target.value) : '')} />
-          </label>
-          <label>
-            日期
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-          </label>
-          <label>
-            备注（可选）
-            <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="例如：自己攒钱买" />
-          </label>
-          <label>
-            上传玩具照片
-            <input type="file" accept="image/*" onChange={(e) => onPhotoChange(e.target.files?.[0])} />
-          </label>
-          {photoDataUrl && <img className="preview" src={photoDataUrl} alt="预览" />}
-        </div>
-        <button className="primary" onClick={addRecord}>保存记录</button>
+        <h2>玩具记账（极速版）</h2>
+        <p className="sub">{activeUser.name}：不需要输入文字，直接上传照片就会记录到今天</p>
+        <label>
+          上传玩具照片（可多选）
+          <input type="file" accept="image/*" multiple onChange={(e) => onPhotosChange(e.target.files)} />
+        </label>
+        {uploading && <p className="sub">上传处理中...</p>}
       </section>
 
       <section className="card">
         <h2>按月查看历史</h2>
         {grouped.length === 0 ? (
-          <p className="sub">还没有记录，先添加第一条吧～</p>
+          <p className="sub">还没有记录，先上传第一张吧～</p>
         ) : (
           grouped.map((g) => (
             <div key={g.month} className="month-block">
@@ -157,17 +131,10 @@ function App() {
                 {g.list.map((item) => (
                   <article key={item.id} className="record">
                     <div className="thumb-wrap">
-                      {item.photoDataUrl ? (
-                        <img src={item.photoDataUrl} alt={item.toyName} className="thumb" />
-                      ) : (
-                        <div className="thumb placeholder">无图</div>
-                      )}
+                      <img src={item.photoDataUrl} alt="玩具照片" className="thumb" />
                     </div>
                     <div className="meta">
-                      <strong>{item.toyName}</strong>
-                      <span>¥{item.amount}</span>
                       <span>{item.date}</span>
-                      {item.note && <em>{item.note}</em>}
                     </div>
                   </article>
                 ))}
