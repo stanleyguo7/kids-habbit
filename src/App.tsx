@@ -27,11 +27,42 @@ function formatMonth(ym: string) {
   return `${y}年${Number(m)}月`
 }
 
+async function compressImageToDataUrl(file: File): Promise<string> {
+  const original = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = () => reject(new Error('读取图片失败'))
+    reader.readAsDataURL(file)
+  })
+
+  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const el = new Image()
+    el.onload = () => resolve(el)
+    el.onerror = () => reject(new Error('图片解码失败'))
+    el.src = original
+  })
+
+  const maxWidth = 1280
+  const scale = Math.min(1, maxWidth / img.width)
+  const w = Math.round(img.width * scale)
+  const h = Math.round(img.height * scale)
+
+  const canvas = document.createElement('canvas')
+  canvas.width = w
+  canvas.height = h
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return original
+  ctx.drawImage(img, 0, 0, w, h)
+
+  return canvas.toDataURL('image/jpeg', 0.78)
+}
+
 function App() {
   const [activeUserId, setActiveUserId] = useState<string>(USERS[0].id)
   const [store, setStore] = useState<Store>({})
   const [uploading, setUploading] = useState(false)
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7))
+  const [error, setError] = useState('')
 
   useEffect(() => {
     const raw = localStorage.getItem(APP_KEY)
@@ -43,7 +74,12 @@ function App() {
   }, [])
 
   useEffect(() => {
-    localStorage.setItem(APP_KEY, JSON.stringify({ activeUserId, recordsByUser: store }))
+    try {
+      localStorage.setItem(APP_KEY, JSON.stringify({ activeUserId, recordsByUser: store }))
+      setError('')
+    } catch {
+      setError('存储空间不足：请先删除一部分历史照片（建议后续迁移 IndexedDB）')
+    }
   }, [activeUserId, store])
 
   const activeUser = USERS.find((u) => u.id === activeUserId)!
@@ -61,33 +97,30 @@ function App() {
       .map(([month, list]) => ({ month, list: list.sort((a, b) => b.date.localeCompare(a.date)) }))
   }, [records])
 
-  const onPhotosChange = async (files: FileList | null) => {
+  const onPhotosChange = async (files: FileList | null, inputEl?: HTMLInputElement) => {
     if (!files || files.length === 0) return
     setUploading(true)
+    setError('')
 
-    const results = await Promise.all(
-      Array.from(files).map(
-        (file) =>
-          new Promise<ToyRecord>((resolve) => {
-            const reader = new FileReader()
-            reader.onload = () => {
-              resolve({
-                id: crypto.randomUUID(),
-                date: `${selectedMonth}-01`,
-                photoDataUrl: reader.result as string,
-              })
-            }
-            reader.readAsDataURL(file)
-          }),
-      ),
-    )
+    try {
+      const results = await Promise.all(
+        Array.from(files).map(async (file) => ({
+          id: crypto.randomUUID(),
+          date: `${selectedMonth}-01`,
+          photoDataUrl: await compressImageToDataUrl(file),
+        })),
+      )
 
-    setStore((prev) => ({
-      ...prev,
-      [activeUserId]: [...results, ...(prev[activeUserId] ?? [])],
-    }))
-
-    setUploading(false)
+      setStore((prev) => ({
+        ...prev,
+        [activeUserId]: [...results, ...(prev[activeUserId] ?? [])],
+      }))
+    } catch {
+      setError('上传失败，请重试')
+    } finally {
+      setUploading(false)
+      if (inputEl) inputEl.value = ''
+    }
   }
 
   return (
@@ -119,9 +152,15 @@ function App() {
         </label>
         <label>
           上传玩具照片（可多选）
-          <input type="file" accept="image/*" multiple onChange={(e) => onPhotosChange(e.target.files)} />
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            onChange={(e) => onPhotosChange(e.target.files, e.currentTarget)}
+          />
         </label>
         {uploading && <p className="sub">上传处理中...</p>}
+        {error && <p className="sub" style={{ color: '#dc2626' }}>{error}</p>}
       </section>
 
       <section className="card">
